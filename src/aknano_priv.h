@@ -52,7 +52,7 @@
 // #define AKNANO_DRY_RUN
 
 #define AKNANO_BOARD_NAME BOARD_NAME
-#define TUF_DATA_BUFFER_LEN 10 * 1024
+#define TUF_DATA_BUFFER_LEN 11 * 1024
 
 #define RECV_BUFFER_SIZE 1640
 #define URL_BUFFER_SIZE 300
@@ -62,8 +62,8 @@
 #define AKNANO_MAX_URI_LENGTH 120
 #define AKNANO_CERT_BUF_SIZE 1024
 #define AKNANO_MAX_DEVICE_NAME_SIZE 100
-#define AKNANO_MAX_UUID_LENGTH 100
-#define AKNANO_MAX_SERIAL_LENGTH 100
+#define AKNANO_MAX_UUID_LENGTH 40
+#define AKNANO_MAX_SERIAL_LENGTH 40
 #define AKNANO_MAX_UPDATE_CORRELATION_ID_LENGTH 100
 
 #define AKNANO_MAX_FIRMWARE_SIZE 0x100000
@@ -88,15 +88,16 @@
 /* Offset of each data field, relative to AKNANO_STORAGE_FLASH_OFFSET */
 
 /* Basic device ID */
+#define AKNANO_DATA_HEADER_SIZE (4 + 64)
 #define AKNANO_FLASH_OFF_DEV_ID_BASE 0
-#define AKNANO_FLASH_OFF_DEV_UUID   (AKNANO_FLASH_OFF_DEV_ID_BASE + 0)
-#define AKNANO_FLASH_OFF_DEV_SERIAL (AKNANO_FLASH_OFF_DEV_ID_BASE + 128)
+#define AKNANO_FLASH_OFF_DEV_UUID   (AKNANO_DATA_HEADER_SIZE + AKNANO_FLASH_OFF_DEV_ID_BASE + 0)
+#define AKNANO_FLASH_OFF_DEV_SERIAL (AKNANO_DATA_HEADER_SIZE + AKNANO_FLASH_OFF_DEV_ID_BASE + AKNANO_MAX_UUID_LENGTH)
 
 /* aknano state */
 #define AKNANO_FLASH_OFF_STATE_BASE (AKNANO_FLASH_SECTOR_SIZE * 1)
-#define AKNANO_FLASH_OFF_LAST_APPLIED_VERSION   (AKNANO_FLASH_OFF_STATE_BASE + 0)
-#define AKNANO_FLASH_OFF_LAST_CONFIRMED_VERSION (AKNANO_FLASH_OFF_STATE_BASE + sizeof(int))
-#define AKNANO_FLASH_OFF_ONGOING_UPDATE_COR_ID  (AKNANO_FLASH_OFF_STATE_BASE + sizeof(int) * 2)
+#define AKNANO_FLASH_OFF_LAST_APPLIED_VERSION   (AKNANO_FLASH_OFF_STATE_BASE + AKNANO_DATA_HEADER_SIZE + 0)
+#define AKNANO_FLASH_OFF_LAST_CONFIRMED_VERSION (AKNANO_FLASH_OFF_STATE_BASE + AKNANO_DATA_HEADER_SIZE + sizeof(int))
+#define AKNANO_FLASH_OFF_ONGOING_UPDATE_COR_ID  (AKNANO_FLASH_OFF_STATE_BASE + AKNANO_DATA_HEADER_SIZE + sizeof(int) * 2)
 
 /* TUF metadata */
 #define AKNANO_FLASH_OFF_TUF_ROLES_BASE (AKNANO_FLASH_SECTOR_SIZE * 2)
@@ -242,8 +243,14 @@ void aknano_update_settings_in_flash(struct aknano_settings *aknano_settings);
 
 status_t aknano_init_flash_storage();
 status_t aknano_read_flash_storage(int offset, void *output, size_t outputMaxLen);
-status_t aknano_write_data_to_flash(int offset, const void *data, size_t data_len);
-status_t aknano_write_data_to_storage(int offset, const void *data, size_t data_len);
+
+status_t aknano_write_data_to_flash(int offset,
+                                    const void *data,
+                                    size_t data_len,
+                                    const void *header,
+                                    size_t header_len);
+status_t aknano_write_data_to_storage(int offset, const void *data, uint32_t data_len);
+
 
 int init_network_context(struct aknano_network_context *network_context);
 
@@ -289,7 +296,7 @@ CK_RV prvDestroyDefaultCryptoObjects(void);
 #endif
 
 #ifdef AKNANO_ALLOW_PROVISIONING
-void vDevModeKeyProvisioning_AkNano(uint8_t *client_key, uint8_t *client_certificate);
+void vDevModeKeyProvisioning_AkNano(uint8_t *client_key, uint8_t *client_certificate, uint8_t *client_pub_key);
 int aknano_provision_device();
 status_t aknano_store_provisioning_data(const char *uuid, const char *serial, char *cert_buf, const char *key_buf);
 #endif
@@ -297,6 +304,10 @@ status_t aknano_store_provisioning_data(const char *uuid, const char *serial, ch
 bool is_valid_certificate_available(bool);
 
 int aknano_provision_tuf_root(struct aknano_context *aknano_context);
+
+
+int aknano_sign_data(const unsigned char *data, size_t data_len, unsigned char *signature, size_t *signature_len);
+int aknano_verify_data(const unsigned char *data, size_t data_len, const unsigned char *signature, size_t signature_len);
 
 #ifdef AKNANO_DELETE_PROVISIONED_TUF_ROOT
 int aknano_clear_provisioned_tuf_root();

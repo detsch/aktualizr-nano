@@ -31,7 +31,7 @@ static int read_local_json_file(int initial_offset, unsigned char *target_buffer
 {
     int ret;
 
-    ret = aknano_read_flash_storage(initial_offset, target_buffer, target_buffer_len);
+    ret = aknano_read_and_verify_flash_storage(initial_offset, target_buffer, target_buffer_len);
     if (ret < 0)
         return ret;
 
@@ -114,6 +114,7 @@ int tuf_client_fetch_file(const char *file_base_name, unsigned char *target_buff
             *file_size = aknano_context->dg_network_context->reply_body_len;
             memcpy(target_buffer, aknano_context->dg_network_context->reply_body, aknano_context->dg_network_context->reply_body_len);
             target_buffer[aknano_context->dg_network_context->reply_body_len] = '\0';
+            // LogInfo(("tuf_client_fetch_file: data for %s:\r\n%s", file_base_name, target_buffer));
             return TUF_SUCCESS;
         } else {
             return -aknano_context->dg_network_context->reply_http_code;

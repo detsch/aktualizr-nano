@@ -53,6 +53,7 @@ static void parse_config(const char *config_data, int buffer_len, struct aknano_
     unsigned int valueLength;
     int int_value;
 
+    LogInfo(("config_data:\r\n%s", config_data));
     if (result == JSONSuccess) {
         result = JSON_Search(config_data, buffer_len,
                              "tag" TUF_JSON_QUERY_KEY_SEPARATOR "Value", strlen("tag" TUF_JSON_QUERY_KEY_SEPARATOR "Value"),

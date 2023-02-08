@@ -311,7 +311,7 @@ static void aknano_init(struct aknano_settings *aknano_settings)
     LogInfo(("Initializing settings..."));
     aknano_init_settings(aknano_settings);
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    vTaskDelay(pdMS_TO_TICKS(3000));
     aknano_handle_img_confirmed(aknano_settings);
 
 #ifdef AKNANO_ENABLE_EXPLICIT_REGISTRATION
@@ -382,7 +382,17 @@ int start_aknano(bool                         xAwsIotMqttMode,
     LogInfo((ANSI_COLOR_YELLOW "Provisioning support is enabled" ANSI_COLOR_RESET));
 #endif
 
+
     aknano_init(&xaknano_settings);
+
+//     unsigned char signature[64];
+//     size_t sig_len = sizeof(signature);
+//     const unsigned char *data =
+// "1234567890123456789012345678901234567890123456789012345678901234zaaaaaaa";
+//     aknano_sign_data(data, strlen(data), signature, &sig_len);
+//     aknano_verify_data(data, strlen(data), signature, sig_len);
+
+
     while (true) {
 #ifdef AKNANO_DUMP_MEMORY_USAGE_INFO
         aknano_dump_memory_info("Before aknano poll");

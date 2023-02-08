@@ -129,7 +129,7 @@ static int HandleReceivedData(const unsigned char *data, int offset, int data_le
         return -1;
     }
 
-    retval = aknano_write_data_to_flash(partition_phys_addr + offset, data, data_len);
+    retval = aknano_write_data_to_flash(partition_phys_addr + offset, data, data_len, NULL, 0);
     return retval;
 }
 

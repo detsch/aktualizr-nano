@@ -201,7 +201,7 @@ exit:
 
 int aknano_gen_device_certificate_and_key(
     const char *uuid, const char *factory_name,
-    const char *serial_string, unsigned char *cert_buf, unsigned char *key_buf)
+    const char *serial_string, unsigned char *cert_buf, unsigned char *key_buf, unsigned char *pub_key_buf)
 {
     LogInfo(("aknano_gen_device_certificate_and_key")); vTaskDelay(50 / portTICK_PERIOD_MS);
 
@@ -279,6 +279,12 @@ int aknano_gen_device_certificate_and_key(
     ret = mbedtls_pk_write_key_pem(&new_device_key, key_buf, AKNANO_CERT_BUF_SIZE);
     if (ret != 0) {
         mbedtls_printf("Error writing key to buffer");
+        goto exit;
+    }
+
+    mbedtls_pk_write_pubkey_pem(&new_device_key, pub_key_buf, AKNANO_CERT_BUF_SIZE);
+    if (ret != 0) {
+        mbedtls_printf("Error writing public key to buffer");
         goto exit;
     }
 

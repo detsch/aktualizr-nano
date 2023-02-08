@@ -5,14 +5,16 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
+#define LIBRARY_LOG_NAME "aktest"
 #define LIBRARY_LOG_LEVEL LOG_INFO
+#include "logging_stack.h"
 
 #include "aknano_priv.h"
 
 #include "pkcs11t.h"
 
 #include "mbedtls/pem.h"
-
+#include "mbedtls/sha512.h"
 
 #ifdef AKNANO_RESET_DEVICE_ID
 CK_RV prvDestroyDefaultCryptoObjects(void)
@@ -184,7 +186,7 @@ CK_RV aknano_read_device_certificate(char *dst, size_t dst_size)
 
 #ifdef AKNANO_ALLOW_PROVISIONING
 /* Perform device provisioning using the default TLS client credentials. */
-void vDevModeKeyProvisioning_AkNano(uint8_t *client_key, uint8_t *client_certificate)
+void vDevModeKeyProvisioning_AkNano(uint8_t *client_key, uint8_t *client_certificate, uint8_t *client_pub_key)
 {
     ProvisioningParams_t xParams;
 
@@ -222,5 +224,298 @@ void vDevModeKeyProvisioning_AkNano(uint8_t *client_key, uint8_t *client_certifi
         xParams.pucClientCertificate = NULL;
 
     vAlternateKeyProvisioning(&xParams);
+}
+#endif
+
+#include "mbedtls/base64.h"
+
+int aknano_verify_data(const unsigned char *data, size_t data_len, const unsigned char *signature, size_t signature_len)
+{
+    /* Find the certificate */
+    CK_OBJECT_HANDLE xHandle = 0;
+    CK_RV xResult;
+    CK_FUNCTION_LIST_PTR xFunctionList;
+    CK_SLOT_ID xSlotId;
+    CK_ULONG xCount = 1;
+    CK_SESSION_HANDLE xSession;
+    CK_ATTRIBUTE xTemplate = { 0 };
+    uint8_t *pucCert = NULL;
+    CK_BBOOL xSessionOpen = CK_FALSE;
+    // unsigned char data_sha512[64];
+    // mbedtls_sha512_ret(data, data_len, data_sha512, 0);
+
+    unsigned char data_sha256[32];
+    mbedtls_sha256_ret(data, data_len, data_sha256, 0);
+
+    // const char* data =  "Heeyyyy!";
+
+    xResult = C_GetFunctionList(&xFunctionList);
+
+    if (CKR_OK == xResult)
+        xResult = xFunctionList->C_Initialize(NULL);
+
+    if ((CKR_OK == xResult) || (CKR_CRYPTOKI_ALREADY_INITIALIZED == xResult))
+        xResult = xFunctionList->C_GetSlotList(CK_TRUE, &xSlotId, &xCount);
+
+    if (CKR_OK == xResult)
+        xResult = xFunctionList->C_OpenSession(xSlotId, CKF_SERIAL_SESSION, NULL, NULL, &xSession);
+
+    if (CKR_OK == xResult) {
+        xSessionOpen = CK_TRUE;
+
+        xResult = xFindObjectWithLabelAndClass( xSession,
+                                                pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS,
+                                                sizeof( pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS ) - 1,
+                                                //CKO_PRIVATE_KEY,
+                                                CKO_PUBLIC_KEY,
+                                                &xHandle );
+    }
+    LogInfo((ANSI_COLOR_YELLOW "*** aknano_verify_data 3 *** data_len=%d xFindObjectWithLabelAndClass xResult=%d" ANSI_COLOR_RESET, data_len, xResult));
+
+    CK_MECHANISM xMech = { 0 };
+    xMech.mechanism = CKM_ECDSA;
+
+
+    if( CKR_OK == xResult )
+    {
+        /* Use the PKCS#11 module to sign. */
+        xResult = xFunctionList->C_VerifyInit( xSession,
+                                    &xMech,
+                                    xHandle );
+    }
+        LogInfo((ANSI_COLOR_YELLOW "*** aknano_verify_data 3 *** C_VerifyInit xResult=%d" ANSI_COLOR_RESET, xResult));
+
+    if( CKR_OK == xResult )
+    {
+        /* Use the PKCS#11 module to sign. */
+        xResult = xFunctionList->C_Verify( xSession,
+                                    data_sha256,
+                                    32,
+                                    signature,
+                                    signature_len );
+    }
+    LogInfo((ANSI_COLOR_YELLOW "*** aknano_verify_data 3 *** C_Verify xResult=%d" ANSI_COLOR_RESET, xResult));
+
+    if (xSessionOpen == CK_TRUE)
+        (void)xFunctionList->C_CloseSession(xSession);
+    
+    return 0;
+}
+
+int aknano_sign_data(const unsigned char *data, size_t data_len, unsigned char *signature, size_t *signature_len)
+{
+    // const char *enc_data = "BD9E420I6uAkVhVruhdU68uz6HsZuqIeokXIerWkGj8WcaMHYLQrI9QM9WNE4XHui/elEajD91n5PczeZhHZ32II1khWCdRrFBLm4XrzPmPVMpNjopMQ1KNUMrHgq0oIV2TyvwKI671QWma5dsTNlq2t";
+    int ret;
+    // char decoded_data[2048] = {0};
+    int olen;
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_sign_data *** data_len=%d *signature_len=%d", data_len, *signature_len));
+
+    // ret = mbedtls_base64_decode(decoded_data, sizeof(decoded_data), &olen, enc_data, sizeof(enc_data));
+    // if (ret) {
+    //     LogError(("aknano_sign_data: Invalid base64 string"));;
+    //     return -1;
+    // }
+
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_sign_data 2 ***"));
+
+    /* Find the certificate */
+    CK_OBJECT_HANDLE xHandle = 0;
+    CK_RV xResult;
+    CK_FUNCTION_LIST_PTR xFunctionList;
+    CK_SLOT_ID xSlotId;
+    CK_ULONG xCount = 1;
+    CK_SESSION_HANDLE xSession;
+    CK_ATTRIBUTE xTemplate = { 0 };
+    uint8_t *pucCert = NULL;
+    CK_BBOOL xSessionOpen = CK_FALSE;
+
+    // unsigned char data_sha512[64];
+    // mbedtls_sha512_ret(data, data_len, data_sha512, 0);
+    unsigned char data_sha256[32];
+    mbedtls_sha256_ret(data, data_len, data_sha256, 0);
+    // const char* data =  "Heeyyyy!";
+
+    xResult = C_GetFunctionList(&xFunctionList);
+
+    if (CKR_OK == xResult)
+        xResult = xFunctionList->C_Initialize(NULL);
+
+    if ((CKR_OK == xResult) || (CKR_CRYPTOKI_ALREADY_INITIALIZED == xResult))
+        xResult = xFunctionList->C_GetSlotList(CK_TRUE, &xSlotId, &xCount);
+
+    if (CKR_OK == xResult)
+        xResult = xFunctionList->C_OpenSession(xSlotId, CKF_SERIAL_SESSION, NULL, NULL, &xSession);
+
+    if (CKR_OK == xResult) {
+        xSessionOpen = CK_TRUE;
+
+        xResult = xFindObjectWithLabelAndClass( xSession,
+                                                pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS,
+                                                sizeof( pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS ) - 1,
+                                                CKO_PRIVATE_KEY,
+                                                &xHandle );
+    }
+
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_sign_data 3 *** xFindObjectWithLabelAndClass xResult=%d", xResult));
+
+
+    CK_MECHANISM xMech = { 0 };
+    xMech.mechanism = CKM_ECDSA;
+
+
+    if( CKR_OK == xResult )
+    {
+        /* Use the PKCS#11 module to sign. */
+        xResult = xFunctionList->C_SignInit( xSession,
+                                    &xMech,
+                                    xHandle );
+    }
+    
+
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_sign_data *** C_SignInit xResult=%d", xResult));
+    if( CKR_OK == xResult )
+    {
+        xResult = xFunctionList->C_Sign( ( CK_SESSION_HANDLE ) xSession,
+                                                           data_sha256,
+                                                           32,
+                                                           signature,
+                                                           ( CK_ULONG_PTR ) signature_len );
+    }
+
+
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_sign_data *** C_Sign xResult=%d *signature_len=%d", xResult, *signature_len));
+
+
+    // int error;
+    // int decrypttext_len;
+    // char decrypttext[2048];
+    // /* Initialize the decryption operation in the session */
+
+    // CK_MECHANISM mechanism;
+    // mechanism.mechanism = 0;
+    // mechanism.pParameter = NULL;
+    // mechanism.ulParameterLen = 0;
+
+	// xResult = C_DecryptInit(xSession, &mechanism, xHandle);
+	// if (xResult != CKR_OK) {
+    //     LogError(("C_DecryptInit: rv = 0x%.8X\n", xResult));
+    // }
+
+	// /* Decrypt the entire ciphertext string */
+	// decrypttext_len = sizeof (decrypttext);
+	// xResult = C_Decrypt(xSession, (CK_BYTE_PTR)decoded_data, strnlen(decoded_data, sizeof(decoded_data)),
+	//     decrypttext, &decrypttext_len);
+
+	// if (xResult != CKR_OK) {
+	// 	LogError(("C_Decrypt: rv = 0x%.8X\n", xResult));
+	// 	error = 1;
+	// 	return -1;
+	// }
+
+	// LogInfo(("\n\n%d bytes decrypted!!!\n\n", decrypttext_len));
+
+	// /* Print the decryption results */
+	// LogInfo(("The value of the decryption is:\n%s", decrypttext));
+
+	LogInfo(("\n aknano_sign_data Done!!!\n"));
+
+    if (xSessionOpen == CK_TRUE)
+        (void)xFunctionList->C_CloseSession(xSession);
+
+    
+    return xResult;
+
+
+
+}
+
+#if 0
+int aknano_decrypt_data()
+{
+    const char *enc_data = "BD9E420I6uAkVhVruhdU68uz6HsZuqIeokXIerWkGj8WcaMHYLQrI9QM9WNE4XHui/elEajD91n5PczeZhHZ32II1khWCdRrFBLm4XrzPmPVMpNjopMQ1KNUMrHgq0oIV2TyvwKI671QWma5dsTNlq2t";
+    int ret;
+    char decoded_data[2048] = {0};
+    int olen;
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_decrypt_data ***"));
+
+    ret = mbedtls_base64_decode(decoded_data, sizeof(decoded_data), &olen, enc_data, sizeof(enc_data));
+    if (ret) {
+        LogError(("aknano_decrypt_data: Invalid base64 string"));;
+        return -1;
+    }
+
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_decrypt_data 2 ***"));
+
+    /* Find the certificate */
+    CK_OBJECT_HANDLE xHandle = 0;
+    CK_RV xResult;
+    CK_FUNCTION_LIST_PTR xFunctionList;
+    CK_SLOT_ID xSlotId;
+    CK_ULONG xCount = 1;
+    CK_SESSION_HANDLE xSession;
+    CK_ATTRIBUTE xTemplate = { 0 };
+    uint8_t *pucCert = NULL;
+    CK_BBOOL xSessionOpen = CK_FALSE;
+
+    xResult = C_GetFunctionList(&xFunctionList);
+
+    if (CKR_OK == xResult)
+        xResult = xFunctionList->C_Initialize(NULL);
+
+    if ((CKR_OK == xResult) || (CKR_CRYPTOKI_ALREADY_INITIALIZED == xResult))
+        xResult = xFunctionList->C_GetSlotList(CK_TRUE, &xSlotId, &xCount);
+
+    if (CKR_OK == xResult)
+        xResult = xFunctionList->C_OpenSession(xSlotId, CKF_SERIAL_SESSION, NULL, NULL, &xSession);
+
+    if (CKR_OK == xResult) {
+        xSessionOpen = CK_TRUE;
+
+        // does this work for keys as well?
+        xResult = prvGetCertificateHandle(xFunctionList, xSession, pkcs11configLABEL_DEVICE_PRIVATE_KEY_FOR_TLS, &xHandle);
+    }
+    LogInfo((ANSI_COLOR_MAGENTA "*** aknano_decrypt_data 3 ***"));
+
+    int error;
+    int decrypttext_len;
+    char decrypttext[2048];
+    /* Initialize the decryption operation in the session */
+
+    CK_MECHANISM mechanism;
+    mechanism.mechanism = 0;
+    mechanism.pParameter = NULL;
+    mechanism.ulParameterLen = 0;
+
+	xResult = C_DecryptInit(xSession, &mechanism, xHandle);
+	if (xResult != CKR_OK) {
+        LogError(("C_DecryptInit: rv = 0x%.8X\n", xResult));
+    }
+
+	/* Decrypt the entire ciphertext string */
+	decrypttext_len = sizeof (decrypttext);
+	xResult = C_Decrypt(xSession, (CK_BYTE_PTR)decoded_data, strnlen(decoded_data, sizeof(decoded_data)),
+	    decrypttext, &decrypttext_len);
+
+	if (xResult != CKR_OK) {
+		LogError(("C_Decrypt: rv = 0x%.8X\n", xResult));
+		error = 1;
+		return -1;
+	}
+
+	LogInfo(("\n\n%d bytes decrypted!!!\n\n", decrypttext_len));
+
+	/* Print the decryption results */
+	LogInfo(("The value of the decryption is:\n%s", decrypttext));
+
+	LogInfo(("\nDone!!!\n"));
+
+
+    if (xSessionOpen == CK_TRUE)
+        (void)xFunctionList->C_CloseSession(xSession);
+
+    return xResult;
+
+
+
 }
 #endif

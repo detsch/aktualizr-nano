@@ -11,11 +11,15 @@
 #include "aknano_provisioning_secret.h"
 #include "aknano_priv.h"
 
-int aknano_gen_device_certificate_and_key(const char *uuid, const char *factory_name, const char *serial_string, unsigned char *cert_buf, unsigned char *key_buf);
+// int aknano_gen_device_certificate_and_key(const char *uuid, const char *factory_name, const char *serial_string, unsigned char *cert_buf, unsigned char *key_buf);
+int aknano_gen_device_certificate_and_key(
+    const char *uuid, const char *factory_name,
+    const char *serial_string, unsigned char *cert_buf, unsigned char *key_buf, unsigned char *pub_key_buf);
 
 #ifndef AKNANO_ENABLE_EL2GO
 static unsigned char cert_buf[AKNANO_CERT_BUF_SIZE];
 static unsigned char key_buf[AKNANO_CERT_BUF_SIZE];
+static unsigned char pub_key_buf[AKNANO_CERT_BUF_SIZE];
 #endif
 
 int aknano_provision_device()
@@ -37,7 +41,7 @@ int aknano_provision_device()
 
 #ifndef AKNANO_ENABLE_EL2GO
     ret = aknano_gen_device_certificate_and_key(uuid, AKNANO_FACTORY_NAME,
-                                                serial, cert_buf, key_buf);
+                                                serial, cert_buf, key_buf, pub_key_buf);
     LogInfo(("aknano_gen_random_device_certificate_and_key ret=%d", ret));
     LogInfo(("cert_buf:\r\n%s", cert_buf));
     LogInfo(("key_buf:\r\n%s", key_buf));
@@ -56,8 +60,6 @@ int aknano_provision_device()
     // temp_buf[256] = 0;
     // LogInfo(("BEFORE serial=%s", temp_buf));
 
-    aknano_save_uuid_and_serial(uuid, serial);
-
     // aknano_read_flash_storage(AKNANO_FLASH_OFF_DEV_UUID, temp_buf, 256);
     // temp_buf[256] = 0;
     // LogInfo(("AFTER uuid=%s", temp_buf));
@@ -73,10 +75,13 @@ int aknano_provision_device()
     LogInfo(("Provisioning Key and Certificate using PKCS#11 interface. Using flash device"));
 #endif
     vDevModeKeyProvisioning_AkNano((uint8_t *)key_buf,
-                                   (uint8_t *)cert_buf);
-    LogInfo(("Provisioning done"));
+                                   (uint8_t *)cert_buf,
+                                   (uint8_t *)pub_key_buf);
     vTaskDelay(pdMS_TO_TICKS(5000));
 #endif
+    aknano_save_uuid_and_serial(uuid, serial);
+    LogInfo(("Provisioning done"));
+    vTaskDelay(pdMS_TO_TICKS(5000));
     return ret;
 }
 #endif
